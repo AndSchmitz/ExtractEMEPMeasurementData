@@ -54,8 +54,11 @@ CheckValuesAreValid <- function(ASingleFlagRow) {
     ) %>%
     distinct()
   
-  #At least one of the flags must state that the measurement is Valid (V)
-  if ( !any(Interpretation$Category == "V") ) {
+  #There are four categories of quality flags:
+  #V (valid measurement), I (invalid measurement), M (missing measurement) or H (hidden and invalid measurements)
+  #Multiple flags can be assigne to each value.
+  #If any of the flags is not of category "V", then discard the dataset
+  if ( !all(Interpretation$Category == "V") ) {
     return(F)
   } else {
     return(T)
@@ -186,7 +189,6 @@ for ( CurrentFolderBasename in InputFolders ) {
     #one.)"
     #Presentation "EBAS Data format" Technical workshop on data quality and data reporting to
     #EBAS October 26 - 28th 2016, Paul Eckhardt, ATMOS, NILU
-    #ddays(): https://www.rdocumentation.org/packages/lubridate/versions/1.7.4/topics/duration
     
     #Now timestamp columns are the last two columns
     nColTreat <- ncol(tmp) - 2
@@ -231,7 +233,7 @@ for ( CurrentFolderBasename in InputFolders ) {
       Extracted <- tmp[,c(nColTreat+1,nColTreat+2,iCol,CorrespondingFlagCol)]
       colnames(Extracted)[3] <- "value"
       colnames(Extracted)[4] <- "Flag"
-      Extracted$variable <- colnames(tmp)[iCol]
+      Extracted$substance <- colnames(tmp)[iCol]
       CurrentDataLong <- bind_rows(CurrentDataLong,Extracted)
     }
     
@@ -247,9 +249,11 @@ for ( CurrentFolderBasename in InputFolders ) {
     if ( all(str_sub(string = CurrentDataLong$Flag, start = 1, end = 2) == "0.") ) {
       CurrentDataLong$Flag <- gsub(x = CurrentDataLong$Flag, pattern = "^0.",replacement = "")
     }
-    #
-    
-    #At least one of the flags per dataset must state that data is valid
+    #There are four categories of quality flags:
+    #V (valid measurement), I (invalid measurement), M (missing measurement) or H (hidden and invalid measurements)
+    #https://projects.nilu.no//ccc/flags/
+    #Multiple flags can be assigne to each value.
+    #If any of the flags is not of category "V", then discard the dataset
     CurrentDataLong$CodeOK <- sapply(X = CurrentDataLong$Flag, FUN = CheckValuesAreValid)
     CurrentDataLong <- CurrentDataLong[CurrentDataLong$CodeOK,]
     
@@ -281,6 +285,9 @@ for ( CurrentFolderBasename in InputFolders ) {
 
 
 #Merge and clean data-----
+print("---")
+print("Loop over files and folders finished.")
+print("---")
 print("Combining input data to one large data frame...")
 Data <- do.call(bind_rows, DataList)
 
@@ -303,6 +310,7 @@ Data$substance <- gsub(x=Data$substance,pattern = "\\.+",replacement = "")
 #Although quality flags have been used to exclude invalid data, some values are still
 #99.999.., 999.9999, 9.99, 9-99999, 9999.9 or similar, indicating missing or invalid data
 #The following regular expression matches the pattern of "some number of 9s, dot, some number of 9s".
+stop("...")
 Data$value[grepl(x=Data$value,pattern=("^9+\\.9+$"))] <- NA
 Data <- Data %>%
   drop_na()
