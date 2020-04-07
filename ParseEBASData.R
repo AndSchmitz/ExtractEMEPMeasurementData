@@ -3,11 +3,11 @@ rm(list=ls())
 graphics.off()
 options(warnPartialMatchDollar = T)
 
-library(plyr)
 library(tidyverse)
+library(lubridate) #to handle dates
 
 # WorkDir <- "D:\\Users\\Schmitz12\\Desktop\\EMEP data preparation"
-WorkDir <- "D:\\Users\\Schmitz12\\Desktop\\NotSyncToY\\Projekte\\KRB Unsicherheiten Paper\\EMEP data preparation"
+WorkDir <- "D:\\Users\\Schmitz12\\Desktop\\EMEP data preparation"
 
 #Prepare I/O
 InDir <- file.path(WorkDir,"Input")
@@ -45,9 +45,9 @@ for ( CurrentFolderBasename in InputFolders ) {
   CurrentMetadata <- matrix(NA,nrow=nInFiles,ncol = nrow(MetatadataKeyWords))
   colnames(CurrentMetadata) <- MetatadataKeyWords$KeyWordShort
   CurrentMetadata <- as.data.frame(CurrentMetadata)
-  CurrentMetadata$StartDate <- NA
-  CurrentMetadata$EndDate <- NA
   CurrentMetadata$FileID <- NA
+  CurrentMetadata$TimeStampFirstMeasurement <- NA
+  CurrentMetadata$TimeStampLastMeasurement <- NA
   
   #_Loop over files------
   for ( iFile in 1:nInFiles ) {
@@ -79,34 +79,17 @@ for ( CurrentFolderBasename in InputFolders ) {
     } #end of loop over metadata-extraction
 
     
-    #Identify date of start of observations
-    StartDate <- grep(pattern = "Startdate", x = TextContent,value = T) %>%
+    #Identify timestamp of start of observations
+    ReferenceTimeStamp <- grep(pattern = "Startdate", x = TextContent,value = T) %>%
       gsub(pattern = "Startdate:\\s*",replacement = "")
-    if ( is.na(StartDate) ) stop("is.na(StartDate)")
-    if ( nchar(StartDate) != 14 ) {
-      stop("Unexpected format for StartDate")
+    if ( is.na(ReferenceTimeStamp) ) stop("is.na(ReferenceTimeStamp)")
+    if ( nchar(ReferenceTimeStamp) != 14 ) {
+      stop("Unexpected format for ReferenceTimeStamp")
     }
-    CurrentMetadata$StartDate[iFile] <- StartDate
-    
+    ReferenceTimeStamp <- as.POSIXct(x=ReferenceTimeStamp,format="%Y%m%d%H%M%S")
+    if ( is.na(ReferenceTimeStamp) ) stop("is.na(ReferenceTimeStamp)")
     
 
-    #FIXME
-    # if ( str_sub(string = StartDate, start = 11, end = 14) != "0000" ) {
-    #   stop("Startdate is not start at mightnight.")
-    # }
-    # StartDate <- StartDate %>%
-    #   strptime(format = "%Y%m%d%H%M%S") %>%
-    #   as.Date() #FIXME keep as DAtetime!
-    # if ( is.na(StartDate) ) stop("is.na(StartDate)")
-    # CurrentMetadata$StartDate[iFile] <- as.character(StartDate)
-    
-    
-    #Identify date of end of observations
-    #Take last row of data table (NumDaysEnd) and add StartDate
-    NumDaysEnd <- as.numeric(unlist(strsplit(x=TextContent[length(TextContent)],split = " "))[[2]])
-    CurrentMetadata$EndDate[iFile] <- as.character(StartDate + NumDaysEnd)
-  
-      
     #__Extract data-----
     
     #Identify line where data starts
@@ -120,6 +103,7 @@ for ( CurrentFolderBasename in InputFolders ) {
     )
     CurrentColnames <- colnames(CurrentData)
     nColnames <- length(CurrentColnames)
+    
     
     #___Identify EMEP data format-----
     DataFormat <- NA
@@ -151,24 +135,27 @@ for ( CurrentFolderBasename in InputFolders ) {
     #____Case 1: No quality flags-----
     if ( DataFormat == "NoQFlags" ) {
       #No matter how many data columns- gather them to long format
-      # stop("1")
-      #FIXME
       
+      #FIXME
+      stop("no flags")
+
       CurrentData <- CurrentData %>%
         mutate(
-          date_start = StartDate + starttime,
-          date_end = StartDate + endtime
+          #Start and end time:
+          #Time is always provided in "days" "time has to be real (we use "days since" reference date)."
+          #Presentation "EBAS Data format" Technical workshop on data quality and data reporting to
+          #EBAS October 26 - 28th 2016, Paul Eckhardt, ATMOS, NILU
+          #ddays(): https://www.rdocumentation.org/packages/lubridate/versions/1.7.4/topics/duration
+          TimeStampStart = ReferenceTimeStamp + ddays(starttime),
+          TimeStampEnd = ReferenceTimeStamp + ddays(endtime)
         ) %>%
         select(-starttime,-endtime) %>%
         #Bring from wide to long format
-        gather(key=substance,value=value,-date_start,-date_end)         
+        gather(key=substance,value=value,-TimeStampStart,-TimeStampEnd)         
     }
     
     #____Case 2: One quality flag for all data columns-----
     if ( DataFormat == "OneQFlagForAll" ) {
-      
-      # stop("2")
-      #FIXME
       
       colnames(CurrentData)[idx_flag_columns] <- "Flag"    
       #Sometimes flag values are too low by factor 1000
@@ -181,19 +168,21 @@ for ( CurrentFolderBasename in InputFolders ) {
         filter(Category == "V") %>%
         select(-Flag,-Category,-Description) %>%
         mutate(
-          date_start = StartDate + starttime,
-          date_end = StartDate + endtime
+          #Start and end time:
+          #Time is always provided in "days" "time has to be real (we use "days since" reference date)."
+          #Presentation "EBAS Data format" Technical workshop on data quality and data reporting to
+          #EBAS October 26 - 28th 2016, Paul Eckhardt, ATMOS, NILU
+          #ddays(): https://www.rdocumentation.org/packages/lubridate/versions/1.7.4/topics/duration
+          TimeStampStart = ReferenceTimeStamp + ddays(starttime),
+          TimeStampEnd = ReferenceTimeStamp + ddays(endtime)
         ) %>%
         select(-starttime,-endtime) %>%
         #Bring from wide to long format
-        gather(key=substance,value=value,-date_start,-date_end)
+        gather(key=substance,value=value,-TimeStampStart,-TimeStampEnd)
     }
  
     #____Case 3: One quality flag for each data column--------
     if ( DataFormat == "OneQFlagForEach" ) {
-      
-      # stop("3")
-      #FIXME
       
       tmp1 <- data.frame()
       #Iteratively select combinations of columns starttime,endtime and a value column + flag column combination
@@ -203,13 +192,18 @@ for ( CurrentFolderBasename in InputFolders ) {
         tmp2 <- tmp2 %>%
           #Convert dates
           mutate(
-            date_start = StartDate + starttime,
-            date_end = StartDate + endtime
+            #Start and end time:
+            #Time is always provided in "days" "time has to be real (we use "days since" reference date)."
+            #Presentation "EBAS Data format" Technical workshop on data quality and data reporting to
+            #EBAS October 26 - 28th 2016, Paul Eckhardt, ATMOS, NILU
+            #ddays(): https://www.rdocumentation.org/packages/lubridate/versions/1.7.4/topics/duration
+            TimeStampStart = ReferenceTimeStamp + ddays(starttime),
+            TimeStampEnd = ReferenceTimeStamp + ddays(endtime)
           ) %>%
           select(-starttime,-endtime) %>%
           #Bring from wide to long format
-          gather(key=substance,value=value,-date_start,-date_end,-Flag)              
-        tmp1 <- rbind.fill(tmp1,tmp2)            
+          gather(key=substance,value=value,-TimeStampStart,-TimeStampEnd,-Flag)              
+        tmp1 <- bind_rows(tmp1,tmp2)            
       } #end of loop over flag columns
       #Sometimes flag values are too low by factor 1000
       if ( any(CurrentData$Flag < 1) ) {
@@ -220,7 +214,7 @@ for ( CurrentFolderBasename in InputFolders ) {
         merge(EMEPFlagList,by="Flag",all.x = T)
       CurrentData <- CurrentData %>%
         filter(Category == "V") %>%
-        select(substance,value,date_start,date_end)      
+        select(substance,value,TimeStampStart,TimeStampEnd)      
     }
     
     #___Append CurrentData to overall data list-----
@@ -230,9 +224,15 @@ for ( CurrentFolderBasename in InputFolders ) {
     CurrentData$FileID <- FileCounter
     DataList[[FileCounter]] <- CurrentData
     FileCounter <- FileCounter + 1
+    
+    #___Store temporal range of observations in metadata----
+    CurrentMetadata$TimeStampFirstMeasurement[iFile] <- min(CurrentData$TimeStampStart)
+    CurrentMetadata$TimeStampLastMeasurement[iFile] <- max(CurrentData$TimeStampStart)
   
-  } #end of loop over files
-  Metadata <- rbind.fill(Metadata,CurrentMetadata)
+  } #__end of loop over files------
+  
+  #_Append metadata for current folder to list-----
+  Metadata <- bind_rows(Metadata,CurrentMetadata)
 } #end of loop over folders
 
 
@@ -242,8 +242,8 @@ Data <- do.call(bind_rows, DataList)
 
 
 #Some sanity checks
-if ( any(is.na(Data$date_start)) ) stop("any(is.na(Data$date_start))")
-if ( any(is.na(Data$date_end)) ) stop("any(is.na(Data$date_end))")
+if ( any(is.na(Data$TimeStampStart)) ) stop("any(is.na(Data$TimeStampStart))")
+if ( any(is.na(Data$TimeStampEnd)) ) stop("any(is.na(Data$TimeStampEnd))")
 if ( any(is.na(Data$substance)) ) stop("any(is.na(Data$substance))")
 #In some files data has multiple columns with the same column name (parallel measurements)
 #R adds .1 ..2 or similar to produce unique column names.
@@ -274,6 +274,7 @@ CoordCheck <- Metadata %>%
   ) %>%
   filter(nDifferentCoords>1)
 if ( nrow(CoordCheck) > 0 ) warning("Some plots have different coords in different files.")
+
 
 #Save to file------
 print("Saving metadata to csv...")
