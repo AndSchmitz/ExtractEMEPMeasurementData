@@ -15,7 +15,54 @@ OutDir <- file.path(WorkDir,"Output")
 dir.create(OutDir,showWarnings = F)
 
 #Read explanation of EMEP data quality flag values
-EMEPFlagList <- read.table(file = file.path(InDir,"EMEP_data_flags.csv"),sep=";",header = T,skip = 2)
+EMEPFlagList <- read.table(
+  file = file.path(InDir,"EMEP_data_flags.csv"),
+  sep=";",
+  header = T,
+  skip = 2,
+  colClasses = "character"
+)
+
+
+#Helping function to interpret quality flags------
+CheckValuesAreValid <- function(ASingleFlagRow) {
+  
+  #https://projects.nilu.no//ccc/flags/
+  
+  #Must be a combination of 3-character-codes:
+  StringLength <- nchar(ASingleFlagRow)
+  if ( (StringLength %% 3) != 0 ) {
+    stop("Number of characters in quality flag must be 3,6,9,...")
+  }
+  
+  #Cut into chunks of 3 characters
+  nChunks <- StringLength/3
+  VectorOfFlags <- str_sub(
+    string = ASingleFlagRow,
+    start = seq(from = 1,to = nChunks*3, by = 3 ),
+    end = seq(from = 3,to = nChunks*3, by = 3 )
+  )
+  VectorOfFlags <- unique(VectorOfFlags)
+  
+  #Compare to EMEP flag list
+  if ( !all(VectorOfFlags %in% EMEPFlagList$Flag) ) {
+    stop(paste("One of the flag values not in EMEP flag list:",ASingleFlagRow))
+  }
+  Interpretation <- EMEPFlagList %>%
+    filter(
+      Flag %in% VectorOfFlags
+    ) %>%
+    distinct()
+  
+  #At least one of the flags must state that the measurement is Valid (V)
+  if ( !any(Interpretation$Category == "V") ) {
+    return(F)
+  } else {
+    return(T)
+  }
+  
+}
+
 
 #Read EMEP data-----
 InputFolders <- list.dirs(path = file.path(InDir),full.names = T)
@@ -99,135 +146,132 @@ for ( CurrentFolderBasename in InputFolders ) {
     CurrentData <- read.table(
       file=FullPath,
       header = T,
-      skip = LineDataStart-1
+      skip = LineDataStart-1,
+      colClasses = "character"
     )
     CurrentColnames <- colnames(CurrentData)
     nColnames <- length(CurrentColnames)
     
-    
-    #___Identify EMEP data format-----
-    DataFormat <- NA
-    idx_flag_columns <- which(grepl(x=CurrentColnames,pattern="flag"))
-    nFlagCols <- length(idx_flag_columns)
-    #Case 1: No quality flags
-    if ( length(idx_flag_columns) == 0 ) {
-      DataFormat <- "NoQFlags"
+    if ( !all(c("starttime","endtime") %in% CurrentColnames) ) {
+      stop("!(c(starttime,endtime) %in% CurrentColnames)")
     }
-    #Case 2: One quality flag for all data columns
-    if ( length(idx_flag_columns) == 1 ) {
-      DataFormat <- "OneQFlagForAll"
+    if ( nrow(CurrentData) == 0 ) {
+      stop("Empty file")
     }
-    #Case 3: One quality flag for each data column
-    if ( length(idx_flag_columns) > 1 ) {
-      #Sanity check
-      if ( nColnames != (2 + 2*nFlagCols) ) {
-        stop(paste("No way to process data structure for input file",FullPath,"implemented (1)."))
-      }
-      DataFormat <- "OneQFlagForEach"
-    }
-    #Else
-    if ( is.na(DataFormat) ) {
-      stop(paste("No way to process data structure for input file",FullPath,"implemented (2)."))
-    }
-    
-    #___Read data according to format------
-    
-    #____Case 1: No quality flags-----
-    if ( DataFormat == "NoQFlags" ) {
-      #No matter how many data columns- gather them to long format
-      
-      #FIXME
-      stop("no flags")
 
-      CurrentData <- CurrentData %>%
-        mutate(
-          #Start and end time:
-          #Time is always provided in "days" "time has to be real (we use "days since" reference date)."
-          #Presentation "EBAS Data format" Technical workshop on data quality and data reporting to
-          #EBAS October 26 - 28th 2016, Paul Eckhardt, ATMOS, NILU
-          #ddays(): https://www.rdocumentation.org/packages/lubridate/versions/1.7.4/topics/duration
-          TimeStampStart = ReferenceTimeStamp + ddays(starttime),
-          TimeStampEnd = ReferenceTimeStamp + ddays(endtime)
-        ) %>%
-        select(-starttime,-endtime) %>%
-        #Bring from wide to long format
-        gather(key=substance,value=value,-TimeStampStart,-TimeStampEnd)         
+   
+    #___Treat date and time-----
+    #Start and end time:
+    #Time is always provided in "days" "time has to be real (we use "days since" reference date)."
+    #Presentation "EBAS Data format" Technical workshop on data quality and data reporting to
+    #EBAS October 26 - 28th 2016, Paul Eckhardt, ATMOS, NILU
+    #ddays(): https://www.rdocumentation.org/packages/lubridate/versions/1.7.4/topics/duration
+    tmp <- CurrentData %>%
+      mutate(
+        TimeStampStart = ReferenceTimeStamp + ddays(as.numeric(starttime)),
+        TimeStampEnd = ReferenceTimeStamp + ddays(as.numeric(endtime))
+      ) %>%
+      select(-starttime,-endtime)
+    if ( any(is.na(tmp[,c("TimeStampStart","TimeStampEnd")])) ) {
+      stop("Error with start/end timestamps")
     }
     
-    #____Case 2: One quality flag for all data columns-----
-    if ( DataFormat == "OneQFlagForAll" ) {
-      
-      colnames(CurrentData)[idx_flag_columns] <- "Flag"    
-      #Sometimes flag values are too low by factor 1000
-      if ( any(CurrentData$Flag < 1) ) {
-        CurrentData$Flag <- round(CurrentData$Flag*1000,0)
+    
+    #___Bring data in long format------
+    
+    #"A flag variable always follows the data variable(s) it applies to. When a flag variable
+    #applies to more then one data variables, the data variables must be in sequence,
+    #directly followed by the applicable flag variable. (With other words: A flag variable
+    #applies to all data variables between the previous flag variable and the current
+    #one.)"
+    #Presentation "EBAS Data format" Technical workshop on data quality and data reporting to
+    #EBAS October 26 - 28th 2016, Paul Eckhardt, ATMOS, NILU
+    #ddays(): https://www.rdocumentation.org/packages/lubridate/versions/1.7.4/topics/duration
+    
+    #Now timestamp columns are the last two columns
+    nColTreat <- ncol(tmp) - 2
+    idxFlagCols <- which(grepl(x=colnames(tmp),pattern="flag"))
+    #There must be a flag column
+    if ( length(idxFlagCols) == 0 ) { 
+      #However, this is not always true
+      #Add a Flag column at the end, indicating all values are OK (optimistic approach)
+      #Ensure timestamp columns are still the last two columns
+      tmp2 <- (tmp[,1:nColTreat])
+      if ( nColTreat == 1 ) {
+        tmp2 <- data.frame(tmp[,1:nColTreat],stringsAsFactors = F)
+        colnames(tmp2) <- colnames(tmp)[1]
       }
-      CurrentData <- CurrentData %>%
-        merge(EMEPFlagList,by="Flag",all.x = T)      
-      CurrentData <- CurrentData %>%
-        filter(Category == "V") %>%
-        select(-Flag,-Category,-Description) %>%
-        mutate(
-          #Start and end time:
-          #Time is always provided in "days" "time has to be real (we use "days since" reference date)."
-          #Presentation "EBAS Data format" Technical workshop on data quality and data reporting to
-          #EBAS October 26 - 28th 2016, Paul Eckhardt, ATMOS, NILU
-          #ddays(): https://www.rdocumentation.org/packages/lubridate/versions/1.7.4/topics/duration
-          TimeStampStart = ReferenceTimeStamp + ddays(starttime),
-          TimeStampEnd = ReferenceTimeStamp + ddays(endtime)
-        ) %>%
-        select(-starttime,-endtime) %>%
-        #Bring from wide to long format
-        gather(key=substance,value=value,-TimeStampStart,-TimeStampEnd)
+      tmp2 <- bind_cols(tmp2,flag = rep("000",times = nrow(tmp)))
+      tmp <- bind_cols(tmp2,tmp[,c(nColTreat+1,nColTreat+2)])
+      nColTreat <- ncol(tmp) - 2
+      idxFlagCols <- which(grepl(x=colnames(tmp),pattern="flag"))
     }
- 
-    #____Case 3: One quality flag for each data column--------
-    if ( DataFormat == "OneQFlagForEach" ) {
-      
-      tmp1 <- data.frame()
-      #Iteratively select combinations of columns starttime,endtime and a value column + flag column combination
-      for ( iFlagCol in 1:nFlagCols ) {
-        tmp2 <- CurrentData[,c(1,2,idx_flag_columns[iFlagCol]-1,idx_flag_columns[iFlagCol])]
-        colnames(tmp2)[4] <- "Flag"       
-        tmp2 <- tmp2 %>%
-          #Convert dates
-          mutate(
-            #Start and end time:
-            #Time is always provided in "days" "time has to be real (we use "days since" reference date)."
-            #Presentation "EBAS Data format" Technical workshop on data quality and data reporting to
-            #EBAS October 26 - 28th 2016, Paul Eckhardt, ATMOS, NILU
-            #ddays(): https://www.rdocumentation.org/packages/lubridate/versions/1.7.4/topics/duration
-            TimeStampStart = ReferenceTimeStamp + ddays(starttime),
-            TimeStampEnd = ReferenceTimeStamp + ddays(endtime)
-          ) %>%
-          select(-starttime,-endtime) %>%
-          #Bring from wide to long format
-          gather(key=substance,value=value,-TimeStampStart,-TimeStampEnd,-Flag)              
-        tmp1 <- bind_rows(tmp1,tmp2)            
-      } #end of loop over flag columns
-      #Sometimes flag values are too low by factor 1000
-      if ( any(CurrentData$Flag < 1) ) {
-        CurrentData$Flag <- round(CurrentData$Flag*1000,0)
-      }      
-      #Filter by flag category - all datasets with a flag category "V" = "valid" are ok      
-      CurrentData <- tmp1 %>%
-        merge(EMEPFlagList,by="Flag",all.x = T)
-      CurrentData <- CurrentData %>%
-        filter(Category == "V") %>%
-        select(substance,value,TimeStampStart,TimeStampEnd)      
+    #The last column to treat must be a flag column
+    if ( !(nColTreat %in% idxFlagCols) ) stop(
+      stop("The last column to treat must be a flag column")  
+    )
+    #The first column must not be a flag column 
+    if ( (1 %in% idxFlagCols) ) stop(
+      stop("The first column must not be a flag column ")  
+    )
+    #Two flag columns must not come directly adjacent
+    if (  ( length(idxFlagCols) > 1 ) & (any(diff(idxFlagCols) == 1)) ) {
+      stop("Two flag columns must not come directly adjacent")
     }
+    #Extract each data column together with start and end timestamps and flag column.
+    #Append this to a dataframe containing the current file content in long format
+    CurrentDataLong <- data.frame()
+    for ( iCol in 1:nColTreat ) {
+      if ( iCol %in% idxFlagCols ) {
+        next
+      }
+      #This is a data column. Identify corresponding flag column
+      CorrespondingFlagCol <- min(idxFlagCols[idxFlagCols > iCol])
+      #Take the four relevant columns and append to long format data
+      Extracted <- tmp[,c(nColTreat+1,nColTreat+2,iCol,CorrespondingFlagCol)]
+      colnames(Extracted)[3] <- "value"
+      colnames(Extracted)[4] <- "Flag"
+      Extracted$variable <- colnames(tmp)[iCol]
+      CurrentDataLong <- bind_rows(CurrentDataLong,Extracted)
+    }
+    
+    
+    #___Treat quality flags------
+    if ( ncol(CurrentDataLong) != 5 ) {
+      stop("ncol(CurrentDataLong) != 5")
+    }
+    #Sanity-check quality flag data format
+    #https://projects.nilu.no//ccc/flags/
+    #Must start with "0." according to data format description. But not the case for all.
+    #Convert if necessary
+    if ( all(str_sub(string = CurrentDataLong$Flag, start = 1, end = 2) == "0.") ) {
+      CurrentDataLong$Flag <- gsub(x = CurrentDataLong$Flag, pattern = "^0.",replacement = "")
+    }
+    #
+    
+    #At least one of the flags per dataset must state that data is valid
+    CurrentDataLong$CodeOK <- sapply(X = CurrentDataLong$Flag, FUN = CheckValuesAreValid)
+    CurrentDataLong <- CurrentDataLong[CurrentDataLong$CodeOK,]
+    
+    #Skip if no valid data left
+    if ( nrow(CurrentDataLong) == 0 ) {
+      next
+    }
+    
     
     #___Append CurrentData to overall data list-----
     #In some cases quality flags indicated invalid measurements for all datasets
     #->Empty data after filtering
-    if ( nrow(CurrentData) == 0 ) next
+    
     CurrentData$FileID <- FileCounter
-    DataList[[FileCounter]] <- CurrentData
+    DataList[[FileCounter]] <- CurrentDataLong
     FileCounter <- FileCounter + 1
     
     #___Store temporal range of observations in metadata----
-    CurrentMetadata$TimeStampFirstMeasurement[iFile] <- min(CurrentData$TimeStampStart)
-    CurrentMetadata$TimeStampLastMeasurement[iFile] <- max(CurrentData$TimeStampStart)
+    if ( any(is.na(min(CurrentDataLong$TimeStampStart))) ) stop("if ( any(is.na(min(CurrentDataLong$TimeStampStart))) )")
+    if ( any(is.na(max(CurrentDataLong$TimeStampStart))) ) stop("if ( any(is.na(max(CurrentDataLong$TimeStampStart))) )")
+    CurrentMetadata$TimeStampFirstMeasurement[iFile] <- min(CurrentDataLong$TimeStampStart)
+    CurrentMetadata$TimeStampLastMeasurement[iFile] <- max(CurrentDataLong$TimeStampStart)
   
   } #__end of loop over files------
   
