@@ -310,11 +310,17 @@ Data$substance <- gsub(x=Data$substance,pattern = "\\.+",replacement = "")
 #Although quality flags have been used to exclude invalid data, some values are still
 #99.999.., 999.9999, 9.99, 9-99999, 9999.9 or similar, indicating missing or invalid data
 #The following regular expression matches the pattern of "some number of 9s, dot, some number of 9s".
-stop("...")
-Data$value[grepl(x=Data$value,pattern=("^9+\\.9+$"))] <- NA
-Data <- Data %>%
-  drop_na()
-
+idxDatasets999 <- which(grepl(x=Data$value,pattern=("^9+\\.9+$")))
+if ( length(idxDatasets999) > 0 ) {
+  Datasets999 <- Data[idxDatasets999,]
+  nDatasets999 <- length(idxDatasets999)
+  print(paste("Despite filtering for quality flags, there are",nDatasets999,"records where the value is 9.999, 9.9, 999.99, etc. This is",round(nDatasets999/nrow(Data)*100,2),"% of the data."))
+  print("The exact values are (only one of occurrence of each exact value):")
+  print(unique(Datasets999$value))
+  print("These datasets are deleted. Even if this affects some valid data, most of the deleted records probably represent missing values.")
+  Data <- Data[-idxDatasets999,]
+}
+  
 
 #Check coords------
 CoordCheck <- Metadata %>%
