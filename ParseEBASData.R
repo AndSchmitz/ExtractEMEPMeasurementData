@@ -256,6 +256,8 @@ for ( CurrentFolderBasename in InputFolders ) {
     #If any of the flags is not of category "V", then discard the dataset
     CurrentDataLong$CodeOK <- sapply(X = CurrentDataLong$Flag, FUN = CheckValuesAreValid)
     CurrentDataLong <- CurrentDataLong[CurrentDataLong$CodeOK,]
+    CurrentDataLong <- CurrentDataLong %>%
+      select(-CodeOK,-Flag)
     
     #Skip if no valid data left
     if ( nrow(CurrentDataLong) == 0 ) {
@@ -264,10 +266,7 @@ for ( CurrentFolderBasename in InputFolders ) {
     
     
     #___Append CurrentData to overall data list-----
-    #In some cases quality flags indicated invalid measurements for all datasets
-    #->Empty data after filtering
-    
-    CurrentData$FileID <- FileCounter
+    CurrentDataLong$FileID <- FileCounter
     DataList[[FileCounter]] <- CurrentDataLong
     FileCounter <- FileCounter + 1
     
