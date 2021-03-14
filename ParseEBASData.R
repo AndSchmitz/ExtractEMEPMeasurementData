@@ -107,8 +107,8 @@ for ( CurrentFolderBasename in InputFolders ) {
   colnames(CurrentMetadata) <- MetatadataKeyWords$KeyWordShort
   CurrentMetadata <- as.data.frame(CurrentMetadata)
   CurrentMetadata$FileID <- NA
-  CurrentMetadata$TimeStampFirstMeasurement <- NA
-  CurrentMetadata$TimeStampLastMeasurement <- NA
+  CurrentMetadata$TimeStampFirstMeasurement <- as.POSIXct(NA)
+  CurrentMetadata$TimeStampLastMeasurement <- as.POSIXct(NA)
   
   #_Loop over files------
   for ( iFile in 1:nInFiles ) {
