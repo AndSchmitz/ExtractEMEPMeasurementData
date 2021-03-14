@@ -6,7 +6,18 @@ options(warnPartialMatchDollar = T)
 library(tidyverse)
 library(lubridate) #to handle dates
 
-# WorkDir <- "D:\\Users\\Schmitz12\\Desktop\\EMEP data preparation"
+#Define working directory here
+#EMEP data files (.nas files) must be located in one or multiple
+#sub-folders in a folder named "Input" in the working directory.
+#e.g.:
+#.../MyWorkDir/Input/EBASData/EBAS_file_1.nas
+#all folders in the "/WorkDir/Input" directory are scanned for ".nas" files,
+#i.e. using multiple subfolders is also possible:
+#.../MyWorkDir/Input/EBASData/NH4_folder/EBAS_NH4_file_1.nas
+#.../MyWorkDir/Input/EBASData/NH4_folder/EBAS_NH4_file_n.nas
+#.../MyWorkDir/Input/EBASData/NO3_folder/EBAS_NO3_file_1.nas
+#.../MyWorkDir/Input/EBASData/NO3_folder/EBAS_NO3_file_n.nas
+
 WorkDir <- "D:\\Users\\Schmitz12\\Desktop\\EMEP data preparation"
 
 #Prepare I/O
