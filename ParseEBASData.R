@@ -18,7 +18,7 @@ library(lubridate) #to handle dates
 #.../MyWorkDir/Input/EBASData/NO3_folder/EBAS_NO3_file_1.nas
 #.../MyWorkDir/Input/EBASData/NO3_folder/EBAS_NO3_file_n.nas
 
-WorkDir <- "/home/schmitz/Schreibtisch/tmp/EBAS"
+WorkDir <- "MyWorkDir"
 
 #Prepare I/O
 InDir <- file.path(WorkDir,"Input")
@@ -91,9 +91,9 @@ CheckValuesAreValid <- function(ASingleFlagRow) {
 
 
 #Read EMEP data-----
-InputFolders <- list.dirs(path = file.path(InDir),full.names = T)
+InputFolders <- list.dirs(path = file.path(InDir),full.names = T, recursive = T)
 InputFolders <- InputFolders[!(InputFolders == file.path(InDir))]
-InputFolders <- basename(InputFolders)
+# InputFolders <- basename(InputFolders)
 
 #Define which metata variables to extract from files
 MetatadataKeyWords <- data.frame(
@@ -107,13 +107,15 @@ DataList <- list()
 Metadata <- data.frame()
 FileCounter <- 1
 
-for ( CurrentFolderBasename in InputFolders ) {
-  print(paste("Processing folder",CurrentFolderBasename,"..."))
+for ( CurrentFolder in InputFolders ) {
+  print(paste("Processing folder",CurrentFolder,"..."))
   
   #Include only ".nas" files in file list
-  CurrentFolder <- file.path(InDir,CurrentFolderBasename)
   InFiles <- list.files(CurrentFolder,pattern = ".nas")
   nInFiles <- length(InFiles)
+  if ( nInFiles == 0 ) {
+    next
+  }
   
   CurrentMetadata <- matrix(NA,nrow=nInFiles,ncol = nrow(MetatadataKeyWords))
   colnames(CurrentMetadata) <- MetatadataKeyWords$KeyWordShort
