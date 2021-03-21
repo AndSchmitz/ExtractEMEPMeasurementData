@@ -1,4 +1,4 @@
-# ParseEBASData
+#  ExtractEMEPMeasurementData
 
 This script parses ".nas" files from the EMEP measurement data portal (http://ebas.nilu.no/) and brings them in a format easier to handle (CSV). The EBAS data format is based on the NASA Ames file format specification (https://projects.nilu.no/ccc/tfmm/kjeller_2016/EBAS_Data_Format_2016-10.pdf). This R script creates two CSV files, which can be linked via column "FileID":
 
