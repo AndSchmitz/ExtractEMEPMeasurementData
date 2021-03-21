@@ -18,7 +18,7 @@ library(lubridate) #to handle dates
 #.../MyWorkDir/Input/EBASData/NO3_folder/EBAS_NO3_file_1.nas
 #.../MyWorkDir/Input/EBASData/NO3_folder/EBAS_NO3_file_n.nas
 
-WorkDir <- "D:\\Users\\Schmitz12\\Desktop\\EMEP data preparation"
+WorkDir <- "/home/schmitz/Schreibtisch/tmp/EBAS"
 
 #Prepare I/O
 InDir <- file.path(WorkDir,"Input")
@@ -64,15 +64,27 @@ CheckValuesAreValid <- function(ASingleFlagRow) {
       Flag %in% VectorOfFlags
     ) %>%
     distinct()
-  
+
   #There are four categories of quality flags:
   #V (valid measurement), I (invalid measurement), M (missing measurement) or H (hidden and invalid measurements)
-  #Multiple flags can be assigne to each value.
-  #If any of the flags is not of category "V", then discard the dataset
-  if ( !all(Interpretation$Category == "V") ) {
-    return(F)
+  #https://projects.nilu.no//ccc/flags/
+  #Multiple flags can be assigned to each value.
+  #If any of the flags is not of category "V", then discard the dataset.
+  #Exceptions: The following cases refer to measurements of precipitation and specifically
+  #to cases where low or no precipitation occurred, such that chemical analyses
+  #was not possible. These cases are no "data gaps" (not: sampling not performed). Thus, these
+  #cases are accepted but the value is set to NA and a comment is added.
+  # 784	I	Low precipitation, concentration estimated
+  # 783	M	Low precipitation, concentration unknown
+  # 782	V	Low precipitation, concentration estimated
+  # 890	M	Concentration in precipitation undefined, no precipitation
+  LowPrecipFlags <- c(784,783, 782, 890)
+  if ( any( VectorOfFlags %in% LowPrecipFlags ) ) {
+    return("LowPrecipVolume")
+  } else if ( !all(Interpretation$Category == "V") ) {
+    return("NotAllValid")
   } else {
-    return(T)
+    return("AllValid")
   }
   
 }
@@ -260,15 +272,26 @@ for ( CurrentFolderBasename in InputFolders ) {
     if ( all(str_sub(string = CurrentDataLong$Flag, start = 1, end = 2) == "0.") ) {
       CurrentDataLong$Flag <- gsub(x = CurrentDataLong$Flag, pattern = "^0.",replacement = "")
     }
-    #There are four categories of quality flags:
-    #V (valid measurement), I (invalid measurement), M (missing measurement) or H (hidden and invalid measurements)
-    #https://projects.nilu.no//ccc/flags/
-    #Multiple flags can be assigne to each value.
-    #If any of the flags is not of category "V", then discard the dataset
-    CurrentDataLong$CodeOK <- sapply(X = CurrentDataLong$Flag, FUN = CheckValuesAreValid)
-    CurrentDataLong <- CurrentDataLong[CurrentDataLong$CodeOK,]
+    #See function CheckValuesAreValid() for information which datasets are discarded / accepted.
+    CurrentDataLong$FlagStatus <- sapply(X = CurrentDataLong$Flag, FUN = CheckValuesAreValid)
     CurrentDataLong <- CurrentDataLong %>%
-      select(-CodeOK,-Flag)
+      #Drop rows where flags indicate problems (but keep flags indicating low precip volume)
+      filter(
+        FlagStatus != "NotAllValid"
+      ) %>%
+      #Treat rows where flags indicate low precip volume
+      mutate(
+        comment = case_when(
+          FlagStatus == "LowPrecipVolume" ~ "LowPrecipVolume",
+          T ~ NA_character_
+        ),
+        value = case_when(
+          FlagStatus == "LowPrecipVolume" ~ NA_character_,
+          T ~ value
+        )
+      ) 
+    CurrentDataLong <- CurrentDataLong %>%
+      select(-FlagStatus,-Flag)
     
     #Skip if no valid data left
     if ( nrow(CurrentDataLong) == 0 ) {
@@ -353,6 +376,5 @@ write.table(x=Data,file = file.path(OutDir,"Parsed_EMEP_Data.csv"),sep=";",row.n
 print(paste(
   "Finished processing",FileCounter,"files from",length(InputFolders),
   "folders, containing",nrow(Data),"measured values from",
-  length(unique(Metadata$code_plot)),"stations. Output data contains ",
-  nrow(Data),"measurement values."
+  length(unique(Metadata$code_plot)),"stations."
 ))
