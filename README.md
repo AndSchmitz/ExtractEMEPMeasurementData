@@ -19,4 +19,5 @@ Respect the EMEP/EBAS data policy.
 
 
 Todo:
+ - The global metadata section of each .nas file is taken into account but the local metadata section is not always correctly translated. This means if there two or more data columns in the same file reporting values in different units or refering to a different matrix (e.g. pm2.5 vs. pm10), then this information is lost.
  - Add dummy data
