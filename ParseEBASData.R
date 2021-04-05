@@ -24,6 +24,9 @@ WorkDir <- "MyWorkDir"
 InDir <- file.path(WorkDir,"Input")
 OutDir <- file.path(WorkDir,"Output")
 dir.create(OutDir,showWarnings = F)
+#Folder for skipped files
+SkippepFilesDir <- file.path(OutDir,"SkippedFiles")
+dir.create(SkippepFilesDir,showWarnings = F)
 
 #Read explanation of EMEP data quality flag values
 EMEPFlagList <- read.table(
@@ -106,6 +109,7 @@ MetatadataKeyWords <- data.frame(
 DataList <- list()
 Metadata <- data.frame()
 FileCounter <- 1
+SkippedFilesCounter <- 0
 
 for ( CurrentFolder in InputFolders ) {
   print(paste("Processing folder",CurrentFolder,"..."))
@@ -123,13 +127,14 @@ for ( CurrentFolder in InputFolders ) {
   CurrentMetadata$FileID <- NA
   CurrentMetadata$TimeStampFirstMeasurement <- as.POSIXct(NA)
   CurrentMetadata$TimeStampLastMeasurement <- as.POSIXct(NA)
-  
+  CurrentMetadata$FileName <- NA
+    
   #_Loop over files------
   for ( iFile in 1:nInFiles ) {
     CurrentInFile <- InFiles[iFile]
     cat(paste0(round(iFile/nInFiles*100,2),"% done. Parsing file ",CurrentInFile,"..."), " \r")
     flush.console()
-
+    
     CurrentMetadata$FileName[iFile] <- CurrentInFile
     FullPath <- file.path(CurrentFolder,CurrentInFile)
         
@@ -152,6 +157,23 @@ for ( CurrentFolder in InputFolders ) {
       CurrentMetadata[iFile,CurrentMetadataVariableShort] <- Txt
       
     } #end of loop over metadata-extraction
+    
+    #If "matrix" could not be determined, skip file and
+    #copy it to a folder called "SkippedFiles". This can happen
+    #if data columns refer to different matrices, i.e. PM2.5 and PM10.
+    #Currently, the script cannot handle these cases. I.e. the "global metadata"
+    #section of each .nas file is taken into account but the local metadata
+    #section is not correctly translated.
+    CurrentMatrix <- CurrentMetadata$matrix[iFile]
+    if ( is.na(CurrentMatrix) | (CurrentMatrix == "") ) {
+      file.copy(
+        from = FullPath,
+        to = file.path(SkippepFilesDir,CurrentInFile)
+      )
+      CurrentMetadata$matrix[iFile] <- "matrix_NA_file_skipped"
+      SkippedFilesCounter <- SkippedFilesCounter + 1
+      next
+    }
 
     
     #Identify timestamp of start of observations
@@ -374,6 +396,11 @@ print("Saving metadata to csv...")
 write.table(x=Metadata,file = file.path(OutDir,"Parsed_EMEP_Metadata.csv"),sep=";",row.names = F)
 print("Saving data to csv...")
 write.table(x=Data,file = file.path(OutDir,"Parsed_EMEP_Data.csv"),sep=";",row.names = F)
+
+print(paste(
+  "Skipped",SkippedFilesCounter,"file(s) because it contains data from different matrices (e.g. PM2.5 and PM10).",
+  "Processing these files is not yet implemented. All skipped files have been copied to output folder \"SkippedFiles\"."
+))
 
 print(paste(
   "Finished processing",FileCounter,"files from",length(InputFolders),
