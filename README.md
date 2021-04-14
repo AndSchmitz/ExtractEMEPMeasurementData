@@ -15,4 +15,4 @@ Each row in the original data (.nas files) has a quality flag (https://projects.
  - 890	M	Concentration in precipitation undefined, no precipitation
 
 ## Caveats
-In some cases, data from different "matrices" is present in file, e.g. first column PM10 data, second column PM2.5 data. The "global metadata" section of these files contains a blank/missing value for the item "matrix" because the matrix is specified for each column separately in the "local metadata" section of the file. Parsing of these files is not yet implemented. The files are skipped and copied to a separate output folder. To avoid this problem, make sure to select only one matrix per download sessions at the EBAS data portal.
+EBAS data files can include data from different "matrices", e.g. first column PM10 data, second column PM2.5 data. This script cannot handle files with data from multiple matrices. Whether files include a single matrix or multiple matrices can be choosen in the download options of the EBAS data portal. Make sure to download one matrix after another in order to avoid multi-matrix files.
