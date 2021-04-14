@@ -3,10 +3,11 @@ rm(list=ls())
 graphics.off()
 options(warnPartialMatchDollar = T)
 
-library(tidyverse)
+library(tidyverse) #data handling
 library(lubridate) #to handle dates
 
 #Define working directory here
+WorkDir <- "/path/to/MyWorkDir"
 #EMEP data files (.nas files) must be located in one or multiple
 #sub-folders in a folder named "Input" in the working directory.
 #e.g.:
@@ -17,8 +18,14 @@ library(lubridate) #to handle dates
 #.../MyWorkDir/Input/EBASData/NH4_folder/EBAS_NH4_file_n.nas
 #.../MyWorkDir/Input/EBASData/NO3_folder/EBAS_NO3_file_1.nas
 #.../MyWorkDir/Input/EBASData/NO3_folder/EBAS_NO3_file_n.nas
+#The file "EMEP_data_flags.csv" must be located in the WorkDir/
+#Results are placed in a folder names "Output" in .../MyWorkDir/Input
+#(or change code for "InDir" and "OutDir" below for a different folder structure)
 
-WorkDir <- "MyWorkDir"
+
+# --- No changes required below this line ---
+
+
 
 #Prepare I/O
 InDir <- file.path(WorkDir,"Input")
@@ -108,7 +115,7 @@ MetatadataKeyWords <- data.frame(
 #_Loop over folders------
 DataList <- list()
 Metadata <- data.frame()
-FileCounter <- 1
+FileCounter <- 0
 SkippedFilesCounter <- 0
 
 for ( CurrentFolder in InputFolders ) {
@@ -131,8 +138,9 @@ for ( CurrentFolder in InputFolders ) {
     
   #_Loop over files------
   for ( iFile in 1:nInFiles ) {
+    FileCounter <- FileCounter + 1
     CurrentInFile <- InFiles[iFile]
-    cat(paste0(round(iFile/nInFiles*100,2),"% done. Parsing file ",CurrentInFile,"..."), " \r")
+    cat(paste0(round(iFile/nInFiles*100,2),"% of current folder processed. Parsing file ",CurrentInFile,"..."), " \r")
     flush.console()
     
     CurrentMetadata$FileName[iFile] <- CurrentInFile
@@ -325,8 +333,8 @@ for ( CurrentFolder in InputFolders ) {
     
     #___Append CurrentData to overall data list-----
     CurrentDataLong$FileID <- FileCounter
-    DataList[[FileCounter]] <- CurrentDataLong
-    FileCounter <- FileCounter + 1
+    DataList[[length(DataList)+1]] <- CurrentDataLong
+    
     
     #___Store temporal range of observations in metadata----
     if ( any(is.na(min(CurrentDataLong$TimeStampStart))) ) stop("if ( any(is.na(min(CurrentDataLong$TimeStampStart))) )")
@@ -338,6 +346,9 @@ for ( CurrentFolder in InputFolders ) {
   
   #_Append metadata for current folder to list-----
   Metadata <- bind_rows(Metadata,CurrentMetadata)
+  if ( any(duplicated(Metadata$FileID)) ) {
+    stop("FileID must be unique in Metadata dataframe.")
+  }
 } #end of loop over folders
 
 
