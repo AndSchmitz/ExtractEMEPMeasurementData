@@ -3,6 +3,7 @@ rm(list=ls())
 graphics.off()
 options(warnPartialMatchDollar = T)
 
+library(data.table) #fast I/O
 library(tidyverse) #data handling
 library(lubridate) #to handle dates
 
@@ -74,7 +75,7 @@ CheckValuesAreValid <- function(ASingleFlagRow) {
       Flag %in% VectorOfFlags
     ) %>%
     distinct()
-
+  
   #There are four categories of quality flags:
   #V (valid measurement), I (invalid measurement), M (missing measurement) or H (hidden and invalid measurements)
   #https://projects.nilu.no//ccc/flags/
@@ -135,7 +136,7 @@ for ( CurrentFolder in InputFolders ) {
   CurrentMetadata$TimeStampFirstMeasurement <- as.POSIXct(NA)
   CurrentMetadata$TimeStampLastMeasurement <- as.POSIXct(NA)
   CurrentMetadata$FileName <- NA
-    
+  
   #_Loop over files------
   for ( iFile in 1:nInFiles ) {
     FileCounter <- FileCounter + 1
@@ -145,10 +146,10 @@ for ( CurrentFolder in InputFolders ) {
     
     CurrentMetadata$FileName[iFile] <- CurrentInFile
     FullPath <- file.path(CurrentFolder,CurrentInFile)
-        
+    
     #__Extract metadata-----
     CurrentMetadata$FileID[iFile] <- FileCounter
-
+    
     #Try to extract each metatadata variable specified in MetatadataKeyWords
     TextContent <- readLines(FullPath)
     for ( iMD in 1:nrow(MetatadataKeyWords) ) {
@@ -182,7 +183,7 @@ for ( CurrentFolder in InputFolders ) {
       SkippedFilesCounter <- SkippedFilesCounter + 1
       next
     }
-
+    
     
     #Identify timestamp of start of observations
     ReferenceTimeStamp <- grep(pattern = "Startdate", x = TextContent,value = T) %>%
@@ -194,7 +195,7 @@ for ( CurrentFolder in InputFolders ) {
     ReferenceTimeStamp <- as.POSIXct(x=ReferenceTimeStamp,format="%Y%m%d%H%M%S")
     if ( is.na(ReferenceTimeStamp) ) stop("is.na(ReferenceTimeStamp)")
     
-
+    
     #__Extract data-----
     
     #Identify line where data starts
@@ -216,8 +217,8 @@ for ( CurrentFolder in InputFolders ) {
     if ( nrow(CurrentData) == 0 ) {
       stop("Empty file")
     }
-
-   
+    
+    
     #___Treat date and time-----
     #Start and end time:
     #Time is always provided in "days" "time has to be real (we use "days since" reference date)."
@@ -341,7 +342,7 @@ for ( CurrentFolder in InputFolders ) {
     if ( any(is.na(max(CurrentDataLong$TimeStampStart))) ) stop("if ( any(is.na(max(CurrentDataLong$TimeStampStart))) )")
     CurrentMetadata$TimeStampFirstMeasurement[iFile] <- min(CurrentDataLong$TimeStampStart)
     CurrentMetadata$TimeStampLastMeasurement[iFile] <- max(CurrentDataLong$TimeStampStart)
-  
+    
   } #__end of loop over files------
   
   #_Append metadata for current folder to list-----
@@ -388,7 +389,7 @@ if ( length(idxDatasets999) > 0 ) {
   print("These datasets are deleted. Even if this affects some valid data, most of the deleted records probably represent missing values.")
   Data <- Data[-idxDatasets999,]
 }
-  
+
 
 #Check coords------
 CoordCheck <- Metadata %>%
@@ -404,9 +405,17 @@ if ( nrow(CoordCheck) > 0 ) warning("Some plots have different coords in differe
 
 #Save to file------
 print("Saving metadata to csv...")
-write.table(x=Metadata,file = file.path(OutDir,"Parsed_EMEP_Metadata.csv"),sep=";",row.names = F)
+fwrite(
+  x = Metadata,
+  file = file.path(OutDir,"Parsed_EMEP_Metadata.csv"),
+  sep=";"
+)
 print("Saving data to csv...")
-write.table(x=Data,file = file.path(OutDir,"Parsed_EMEP_Data.csv"),sep=";",row.names = F)
+fwrite(
+  x = Data,
+  file = file.path(OutDir,"Parsed_EMEP_Data.csv"),
+  sep=";"
+)
 
 print(paste(
   "Skipped",SkippedFilesCounter,"file(s) because it contains data from different matrices (e.g. PM2.5 and PM10).",
