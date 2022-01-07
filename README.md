@@ -7,7 +7,14 @@ This script parses ".nas" files from the EMEP measurement data portal (http://eb
  - *Parsed_EMEP_Data.csv* the actual data: "TimeStampStart", "TimeStampEnd", "value", "substance", "comment", "FileID"
  
 ## Data quality flags
-Each row in the original data (.nas files) has a quality flag (https://projects.nilu.no//ccc/flags/). Rows with quality flags indicating non-valid measurements (i.e. quality flag not in category "V") are deleted, with four exceptions: The following quality flags indicate that concentrations were not correctly measured due to too little precipitation amount. These data rows are not deleted. Instead, the concentration is set to NA and value of the comment field is set to "LowPrecipVolume".
+Each row in the original data (.nas files) has a quality flag (https://projects.nilu.no//ccc/flags/). In general, rows with quality flags indicating non-valid measurements (i.e. quality flag not in category "V") are deleted. Additional quality flag numbers can be specified which should also cause deletion of the respective measurement value. For example:
+
+  - 781, 	#V 	Value below detection limit, data element contains detection limit
+  - 780, 	#V 	Value below detection or quantification limit, data element contains estimated or measured value. Use of flag 147 is encouraged.
+  - 771, 	#V 	Value above range, data element contains upper range limit
+  - 770 	#V 	Value above range, data element contains estimated value
+
+In addition, the following quality flags indicate that concentrations were not correctly measured due to too little precipitation amount. These data rows are not deleted. Instead, the concentration is set to NA and value of the comment field is set to "LowPrecipVolume".
 
  - 784	I	Low precipitation, concentration estimated
  - 783	M	Low precipitation, concentration unknown
