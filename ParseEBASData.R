@@ -24,6 +24,21 @@ WorkDir <- "/path/to/MyWorkDir"
 #(or change code for "InDir" and "OutDir" below for a different folder structure)
 
 
+#Define quality flags to drop
+#Rows with quality flags indicating non-valid measurements (i.e. quality flag not in category
+#"V") are deleted, with four exceptions relating to low precipitation measurements. See readme.md
+#for more information. Here, additional quality flags can be defined which will cause data to
+#be discarded if it is flagged with this values.
+QualityFlagsToDropData <- c(
+  #Explanations according to https://projects.nilu.no//ccc/flags/
+  781, 	#V 	Value below detection limit, data element contains detection limit
+  780, 	#V 	Value below detection or quantification limit, data element contains estimated or measured value. Use of flag 147 is encouraged.
+  771, 	#V 	Value above range, data element contains upper range limit
+  770 	#V 	Value above range, data element contains estimated value
+  #147 	#V 	Below theoretical detection limit or formal Q/A limit, but a value has been measured and reported and is considered valid
+)
+
+
 # --- No changes required below this line ---
 
 
@@ -65,6 +80,11 @@ CheckValuesAreValid <- function(ASingleFlagRow) {
     end = seq(from = 3,to = nChunks*3, by = 3 )
   )
   VectorOfFlags <- unique(VectorOfFlags)
+  
+  #Drop if any flag is in manually defined (above) list of QualityFlagsToDropData
+  if ( any(VectorOfFlags %in% QualityFlagsToDropData) ) {
+    return("NotAllValid")
+  }
   
   #Compare to EMEP flag list
   if ( !all(VectorOfFlags %in% EMEPFlagList$Flag) ) {
