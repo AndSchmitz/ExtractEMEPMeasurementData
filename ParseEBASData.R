@@ -153,8 +153,8 @@ for ( CurrentFolder in InputFolders ) {
   colnames(CurrentMetadata) <- MetatadataKeyWords$KeyWordShort
   CurrentMetadata <- as.data.frame(CurrentMetadata)
   CurrentMetadata$FileID <- NA
-  CurrentMetadata$TimeStampFirstMeasurement <- as.POSIXct(NA)
-  CurrentMetadata$TimeStampLastMeasurement <- as.POSIXct(NA)
+  CurrentMetadata$TimeStampFirstMeasurement <- lubridate::ymd_hms(x=NA, tz = "UTC")
+  CurrentMetadata$TimeStampLastMeasurement <- lubridate::ymd_hms(x=NA, tz = "UTC")
   CurrentMetadata$FileName <- NA
   
   #_Loop over files------
@@ -212,7 +212,7 @@ for ( CurrentFolder in InputFolders ) {
     if ( nchar(ReferenceTimeStamp) != 14 ) {
       stop("Unexpected format for ReferenceTimeStamp")
     }
-    ReferenceTimeStamp <- as.POSIXct(x=ReferenceTimeStamp,format="%Y%m%d%H%M%S")
+    ReferenceTimeStamp <- lubridate::ymd_hms(x=ReferenceTimeStamp, tz = "UTC")
     if ( is.na(ReferenceTimeStamp) ) stop("is.na(ReferenceTimeStamp)")
     
     
@@ -244,11 +244,11 @@ for ( CurrentFolder in InputFolders ) {
     #Time is always provided in "days" "time has to be real (we use "days since" reference date)."
     #Presentation "EBAS Data format" Technical workshop on data quality and data reporting to
     #EBAS October 26 - 28th 2016, Paul Eckhardt, ATMOS, NILU
-    #ddays(): https://www.rdocumentation.org/packages/lubridate/versions/1.7.4/topics/duration
+    #lubridate::ddays(): https://www.rdocumentation.org/packages/lubridate/versions/1.7.4/topics/duration
     tmp <- CurrentData %>%
       mutate(
-        TimeStampStart = ReferenceTimeStamp + ddays(as.numeric(starttime)),
-        TimeStampEnd = ReferenceTimeStamp + ddays(as.numeric(endtime))
+        TimeStampStart = ReferenceTimeStamp + lubridate::ddays(as.numeric(starttime)),
+        TimeStampEnd = ReferenceTimeStamp + lubridate::ddays(as.numeric(endtime))
       ) %>%
       select(-starttime,-endtime)
     if ( any(is.na(tmp[,c("TimeStampStart","TimeStampEnd")])) ) {
