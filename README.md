@@ -5,6 +5,11 @@ This script parses ".nas" files from the EMEP measurement data portal (http://eb
  - *Parsed_EMEP_Metadata.csv* with metadata per input file: "StationName", "code_plot", "lat", "lon", "altitude", "component", "matrix", "unit", "InstrumentType", "FileID", "TimeStampFirstMeasurement", "TimeStampLastMeasurement", "FileName"
  
  - *Parsed_EMEP_Data.csv* the actual data: "TimeStampStart", "TimeStampEnd", "value", "substance", "comment", "FileID"
+
+
+## Caveats
+EBAS data files can include data from different "matrices", e.g. first column PM10 data, second column PM2.5 data or from multiple substances, e.g. first column Na, second column Cl. This script cannot safely handle files with data from multiple matrices or substances. Make sure to select only one matrix (pm1, wetdep, etc.) and one substance/parameter in the EMEP measurement data portal when downloading data to be processed with this script. 
+ 
  
 ## Data quality flags
 Each row in the original data (.nas files) has a quality flag (https://projects.nilu.no//ccc/flags/). In general, rows with quality flags indicating non-valid measurements (i.e. quality flag not in category "V") are deleted. Additional quality flag numbers can be specified which should also cause deletion of the respective measurement value. For example:
@@ -21,5 +26,3 @@ In addition, the following quality flags indicate that concentrations were not c
  - 782	V	Low precipitation, concentration estimated
  - 890	M	Concentration in precipitation undefined, no precipitation
 
-## Caveats
-EBAS data files can include data from different "matrices", e.g. first column PM10 data, second column PM2.5 data. This script cannot handle files with data from multiple matrices. Whether files include a single matrix or multiple matrices can be choosen in the download options of the EBAS data portal. Make sure to download one matrix after another in order to avoid multi-matrix files.
