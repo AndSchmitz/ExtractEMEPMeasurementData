@@ -8,7 +8,7 @@ library(tidyverse) #data handling
 library(lubridate) #to handle dates
 
 #Define working directory here
-WorkDir <- "/path/to/MyWorkDir"
+WorkDir <- "/home/schmitz/Downloads/test imp"
 #EMEP data files (.nas files) must be located in one or multiple
 #sub-folders in a folder named "Input" in the working directory.
 #e.g.:
@@ -124,7 +124,9 @@ CheckValuesAreValid <- function(ASingleFlagRow) {
 #Read EMEP data-----
 InputFolders <- list.dirs(path = file.path(InDir),full.names = T, recursive = T)
 InputFolders <- InputFolders[!(InputFolders == file.path(InDir))]
-# InputFolders <- basename(InputFolders)
+if ( length(InputFolders) == 0 ) {
+  stop("No input folders found. Input folders must be located like ../WorkDir/Input/InputFolderA")
+}
 
 #Define which metata variables to extract from files
 MetatadataKeyWords <- data.frame(
@@ -182,6 +184,13 @@ for ( CurrentFolder in InputFolders ) {
       if ( length(Txt) != 1 ) next
       Txt <- gsub(x=Txt, pattern = paste0(CurrentMetadataVariable,":"),replacement = "")
       Txt <- gsub(x=Txt, pattern = " ",replacement = "")
+      #Remove special characters (especially in StationName) that cause trouble when using the
+      #data.
+      Txt <- gsub(
+        x = Txt,
+        pattern = "\'",
+        replacement = ""
+      )
       #Save
       CurrentMetadata[iFile,CurrentMetadataVariableShort] <- Txt
       
