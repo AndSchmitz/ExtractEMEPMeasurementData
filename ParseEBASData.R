@@ -95,6 +95,10 @@ for ( CurrentFolder in InputFolders ) {
   colnames(CurrentMetadata) <- MetatadataKeyWords$KeyWordShort
   CurrentMetadata <- as.data.frame(CurrentMetadata)
   CurrentMetadata$FileID <- NA
+  #FIXME
+  #There is a row names "Timezone" in the data. In many datasets the value is set to "UTC"
+  #(no counter-example found). However, it would be cleaner to check or even parse the
+  #time zone from that line.
   CurrentMetadata$TimeStampFirstMeasurement <- lubridate::ymd_hms(x=NA, tz = "UTC")
   CurrentMetadata$TimeStampLastMeasurement <- lubridate::ymd_hms(x=NA, tz = "UTC")
   CurrentMetadata$FileName <- NA
