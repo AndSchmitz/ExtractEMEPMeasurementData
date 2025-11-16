@@ -364,11 +364,13 @@ fwrite(
   sep=";"
 )
 
-warning(paste(
-  "Skipped",SkippedFilesCounter,"file(s) because: (A) File contains data from different matrices (e.g. PM2.5 and PM10).",
-  "Processing these files is not yet implemented. Or (B) file does not contain a \"flag\" column with data flags.",
-  "All skipped files have been copied to output folder \"SkippedFiles\"."
-))
+if ( SkippedFilesCounter > 0 ) {
+  warning(paste(
+    "Skipped",SkippedFilesCounter,"file(s) because: (A) File contains data from different matrices (e.g. PM2.5 and PM10).",
+    "Processing these files is not yet implemented. Or (B) file does not contain a \"flag\" column with data flags.",
+    "All skipped files have been copied to output folder \"SkippedFiles\"."
+  ))
+}
 
 print(paste(
   "Finished processing",FileCounter,"files from",length(InputFolders),
